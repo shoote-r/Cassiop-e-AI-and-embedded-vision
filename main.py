@@ -10,36 +10,23 @@ def augment_image_numpy(image_array):
     """
     aug_image = image_array.copy()
 
-    # 1. Flip horizontal aléatoire (50% de chance)
     if np.random.rand() > 0.5:
-        # np.fliplr inverse l'image de gauche à droite
         aug_image = np.fliplr(aug_image)
 
-    # 2. Ajout de bruit gaussien léger
     if np.random.rand() > 0.5:
-        # Ajoute un bruit aléatoire d'une variance de 0.02
         noise = np.random.randn(*aug_image.shape) * 0.02
         aug_image = aug_image + noise
 
-    # 3. Translation légère (décalage de quelques pixels)
     if np.random.rand() > 0.5:
-        shift_x = np.random.randint(-3, 4) # Décalage entre -3 et +3 pixels
+        shift_x = np.random.randint(-3, 4) 
         shift_y = np.random.randint(-3, 4)
-        # On utilise roll (attention, ça crée un effet de boucle sur les bords, 
-        # mais c'est suffisant pour un petit modèle maison)
         aug_image = np.roll(aug_image, shift=shift_y, axis=0)
         aug_image = np.roll(aug_image, shift=shift_x, axis=1)
 
-    # On s'assure que les valeurs restent bien entre 0 et 1 (à cause du bruit)
     aug_image = np.clip(aug_image, 0.0, 1.0)
     
     return aug_image
-# -----------------------
-# MobileNetV1 from scratch
-# Forward + backward (pedagogical, not optimized)
-# -----------------------
 
-# --- Activations and losses ---
 
 def relu(x):
     return np.maximum(0, x)
@@ -303,8 +290,8 @@ def compute_gradients(image, target_class, weights):
 # --- Training loop ---
 
 def train_mobilenet_from_scratch(X_train, Y_train, epochs=5, learning_rate=0.005, batch_size=16, max_samples=None):
-    # Initialisation de He (plus stable que randn * 0.1)
-    weights = init_mobilenet_weights() 
+    # Initialisation de He 
+    weights = init_toy_weights(num_classes = 2) 
     
     num_samples = len(X_train) if not max_samples else min(len(X_train), max_samples)
 
@@ -324,11 +311,10 @@ def train_mobilenet_from_scratch(X_train, Y_train, epochs=5, learning_rate=0.005
             x = X_train[idx]
             y = int(Y_train[idx])
             
-            # --- C'EST ICI QU'ON FERA LA DATA AUGMENTATION ---
             x = augment_image_numpy(x)
             
             # Calcul des gradients pour cette image
-            loss, preds, grads = compute_gradients(x, y, weights)
+            loss, preds, grads = compute_gradients_toy(x, y, weights)
             total_loss += loss
             if np.argmax(preds) == y:
                 correct += 1
@@ -358,7 +344,71 @@ def train_mobilenet_from_scratch(X_train, Y_train, epochs=5, learning_rate=0.005
         learning_rate *= 0.9 
         
     return weights
+def init_toy_weights(num_classes=5):
+    """Initialise un réseau très simple avec l'initialisation de He."""
+    weights = {}
+    # 1 seule couche de convolution (3x3, 1 canal d'entrée, 8 filtres de sortie)
+    weights['W_conv1'] = np.random.randn(3, 3, 1, 8) * np.sqrt(2.0 / (3 * 3 * 1))
+    weights['b_conv1'] = np.zeros(8)
+    
+    # Couche dense finale (8 entrées venant du Pooling, X sorties pour les classes)
+    weights['W_dense'] = np.random.randn(8, num_classes) * np.sqrt(2.0 / 8)
+    weights['b_dense'] = np.zeros(num_classes)
+    
+    return weights
 
+def forward_toy(image, weights):
+    """Passe avant du réseau jouet."""
+    # 1. Convolution + ReLU
+    x = standard_conv2d(image, weights['W_conv1'], weights['b_conv1'], stride=2)
+    z_conv1 = x.copy()
+    a_conv1 = relu(z_conv1)
+
+    # 2. Global Average Pooling
+    pooled = global_average_pooling(a_conv1)
+
+    # 3. Dense (Classification)
+    z = np.dot(pooled, weights['W_dense']) + weights['b_dense']
+    
+    # On sauvegarde ce dont on a besoin pour la passe arrière
+    cache = {
+        'z_conv1': z_conv1,
+        'a_conv1': a_conv1,
+        'pooled_shape': a_conv1.shape
+    }
+    return z, cache
+
+def compute_gradients_toy(image, target_class, weights):
+    """Calcule les gradients pour une image avec le réseau jouet."""
+    # --- FORWARD ---
+    z, cache = forward_toy(image, weights)
+    predictions = softmax(z)
+    loss = -np.log(predictions[target_class] + 1e-12)
+
+    # --- BACKWARD ---
+    # 1. Gradient de la Loss par rapport aux logits (z de la couche dense)
+    dZ_dense = softmax_cross_entropy_backward(predictions, target_class)
+
+    # 2. Rétropropagation dans la couche Dense
+    pooled = global_average_pooling(cache['a_conv1'])
+    dA_pool, dW_dense, db_dense = dense_backward(dZ_dense, pooled, weights['W_dense'])
+
+    # 3. Rétropropagation dans le Global Average Pooling
+    dA_conv1 = global_average_pooling_backward(dA_pool, cache['pooled_shape'])
+
+    # 4. Rétropropagation dans la ReLU
+    dZ_conv1 = relu_backward(dA_conv1, cache['z_conv1'])
+
+    # 5. Rétropropagation dans la Convolution
+    # (On ne récupère pas dImage car c'est la première couche, on s'en fiche)
+    _, dW_conv1, db_conv1 = standard_conv2d_backward(dZ_conv1, image, weights['W_conv1'], stride=2)
+
+    # --- STOCKAGE DES GRADIENTS ---
+    grads = {
+        'W_dense': dW_dense, 'b_dense': db_dense,
+        'W_conv1': dW_conv1, 'b_conv1': db_conv1
+    }
+    return loss, predictions, grads
 # --- Dataset loader from archive CSV ---
 
 def load_dataset_from_csv(csv_path, base_dir='archive', img_size=(96,96), max_samples=None):
@@ -396,7 +446,32 @@ def load_dataset_from_csv(csv_path, base_dir='archive', img_size=(96,96), max_sa
     if len(X) == 0:
         return None, None
     return np.stack(X, axis=0), np.array(Y, dtype=np.int32)
-
+# --- ÉQUILIBRAGE DU DATASET (Mode 2 classes) ---
+def create_balanced_binary_dataset(X, Y, class_a=3, class_b=4, samples_per_class=50):
+    # Trouver les indices des deux classes
+    idx_a = np.where(Y == class_a)[0]
+    idx_b = np.where(Y == class_b)[0]
+    
+    # Mélanger les indices
+    np.random.shuffle(idx_a)
+    np.random.shuffle(idx_b)
+    
+    # Prendre le nombre exact d'échantillons
+    idx_a_subset = idx_a[:samples_per_class]
+    idx_b_subset = idx_b[:samples_per_class]
+    
+    # Combiner les indices
+    final_indices = np.concatenate([idx_a_subset, idx_b_subset])
+    np.random.shuffle(final_indices) # Remélanger le tout
+    
+    # Créer les nouveaux X et Y
+    X_balanced = X[final_indices]
+    Y_balanced = Y[final_indices]
+    
+    # Renuméroter les labels en 0 et 1 (pour avoir une classification binaire classique)
+    Y_binary = np.where(Y_balanced == class_a, 0, 1)
+    
+    return X_balanced, Y_binary
 # --- Main: load archive dataset and train ---
 if __name__ == '__main__':
     train_csv = os.path.join('archive', 'train.csv')
@@ -411,7 +486,12 @@ if __name__ == '__main__':
         print('Falling back to random dataset (100 samples)')
         X_train = np.random.rand(100, 96, 96, 1).astype(np.float32)
         Y_train = np.random.randint(0, 5, size=(100,))
-    weights = train_mobilenet_from_scratch(X_train, Y_train, epochs=10, learning_rate=0.001, max_samples=250)
+    if X_train is not None:
+        print(f"Répartition des classes dans le dataset : {np.bincount(Y_train)}")
+    print("Filtrage pour obtenir un dataset équilibré de 2 classes...")
+    X_train, Y_train = create_balanced_binary_dataset(X_train, Y_train, class_a=3, class_b=4, samples_per_class=50)
+    print(f"Nouvelle répartition des classes : {np.bincount(Y_train)}")
+    weights = train_mobilenet_from_scratch(X_train, Y_train, epochs=1000, learning_rate=0.001, max_samples=5)
     print('\nExporting weights to .bin...')
     for name, arr in weights.items():
         arr.astype(np.float32).tofile(f'{name}.bin')
