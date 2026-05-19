@@ -1,2 +1,2 @@
 Projet Cassiopée...
-Branche conversion
+Branche conversion_Optimisation ayant pour but d'introduire le pruning et la quantification 
