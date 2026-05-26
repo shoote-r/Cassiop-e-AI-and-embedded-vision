@@ -2,25 +2,17 @@
 Couches du réseau de neurones, en NumPy pur mais vectorisées.
 
 Conventions:
-    - Format des tenseurs: (N, H, W, C) "channels-last"
-        N = batch size, H = hauteur, W = largeur, C = canaux
     - Les couches sont des CLASSES avec un état interne (poids + cache).
-      Le cache stocke les valeurs nécessaires à la passe arrière.
+      Le cache stocke les valeurs nécessaires à back-propagation
     - forward(x) -> y
     - backward(dy) -> dx (et stocke les gradients des poids dans self.grads)
 
 Note sur im2col:
-    La convolution naïve avec 4 boucles imbriquées est ~50x trop lente.
     im2col transforme la conv en GEMM (multiplication matricielle géante)
     que NumPy/BLAS exécute en code natif optimisé.
 """
 
 import numpy as np
-
-
-# ============================================================================
-# Helpers im2col : la clé de la vectorisation
-# ============================================================================
 
 def im2col(x, kernel_h, kernel_w, stride=1, pad=0):
     """
@@ -29,7 +21,7 @@ def im2col(x, kernel_h, kernel_w, stride=1, pad=0):
     le filtre. Permet de remplacer la conv par un np.dot().
 
     Args:
-        x: (N, H, W, C)
+        x: (N, H, W, C) un tenseur 
     Returns:
         cols: (N * H_out * W_out, kernel_h * kernel_w * C)
         out_shape: (H_out, W_out) pour reconstruire ensuite
