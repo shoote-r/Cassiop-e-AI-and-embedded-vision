@@ -104,7 +104,7 @@ while True:
     resized = cv2.GaussianBlur(resized, (3, 3), 0)
 
     # Normaliser les valeurs entre 0 et 1 et forcer le type float32
-    normalized = resized.astype('float32') / 255.0
+    normalized = resized.astype('float32') / 255.0 - 0.5
 
     # Remodeler l'image pour qu'elle corresponde à ce que le modèle attend
     input_data = np.reshape(normalized, input_shape)

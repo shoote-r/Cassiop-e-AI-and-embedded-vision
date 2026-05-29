@@ -86,7 +86,7 @@ def convert_to_tflite(model, out_path):
     with open(out_path, 'wb') as f:
         f.write(tflite_model)
 
-def main(pickle_path='model_150_epoch.pickle', out_path='mnist_custom.tflite'):
+def main(pickle_path='model.pickle', out_path='mnist_custom.tflite'):
     print('Chargement des poids depuis', pickle_path)
     weights = load_weights_from_pickle(pickle_path)
 
