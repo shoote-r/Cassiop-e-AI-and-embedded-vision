@@ -1,35 +1,68 @@
-Projet Cassiopée...
-Branche conversion_Optimisation ayant pour but d'introduire le pruning et la quantification 
+# Cassiopée n°79 — IA et Vision Embarquée
 
-# Fonctionnement 
-Voici la structure utilisée : 
+Classifieur de chiffres manuscrits (MNIST) implémenté **from scratch en NumPy**,
+optimisé pour la vision embarquée via **quantification full-integer**.
+Inférence temps réel via webcam.
 
-cnn_mnist/
-├── mnist_loader.py      Chargement du dataset MNIST
-├── layers.py            Briques du réseau (conv, pool, dense, activations)
-├── model.py             Assemblage LeNet
-├── gradient_check.py    Validation de la backprop
-├── train.py             Entraînement
-├── preprocessing.py     Prétraitement image webcam → MNIST
-├── inference_cam.py     Inférence temps réel webcam
-│
-├── mnist_data/          Dataset téléchargé (4 fichiers .gz)
-└── lenet_mnist.npz      Poids entraînés
+## Prérequis
 
+- Python 3.10 ou supérieur
+- Une webcam (pour l'inférence temps réel)
 
-NB : gradient.py a pour unique but de vérifier que la backprop est correcte, sinon le fichier n'a pas d'impact sur le fonctionnement du réseau.
+## Installation
 
+```bash
+git clone <url-du-repo>
+cd <nom-du-repo>
+pip install -r requirements.txt
+```
 
+## Utilisation
 
-## Quantification 
-1. **$python quantization.py** -> met en place la quantification i.e vérifie les primitives (comment quantifier une valeur)
-2. **$python eval_quantization.py** -> évalue la perte de précision causée par la quantification 
-3. **$python benchmark.py** -> impact quantification sur espace disque, RAM et temps (attention l'évalualtion sur le temps est ric rac)
+Deux cas d'usage selon votre objectif.
 
-- **quantized_model.py** -> applique la quantification au réseau entier
+### Cas 1 — Utilisation standard
 
-## Pruning 
-Le pruning s'effectue par étapes : entraînement -> pruning -> reentraînememnt -> pruning -> ...
-On a 2 types de pruning : 
-1. pruning non-structuré  : on met à zéro les poids individuels les plus petits, cela dit on obtient un gain de mémoire uniquement si on stocke ensuite les poids dans des matrices creuses et que le matériel embarqué sait les exploiter 
-2. pruning structuré : ici on supprime des structures entières i.e un filtre de convolution ou une couche dense donc on réduit le modèle. Cela impact beaucoup la précision et il faut donc effectuer plus de fine tuning.
+Entraîner le modèle puis l'utiliser en inférence webcam.
+
+```bash
+python train.py            # entraîne le modèle (~4 min)
+python inference_cam.py    # lance l'inférence webcam temps réel
+```
+
+Présentez un chiffre écrit au stylo noir sur papier blanc dans le carré vert
+affiché à l'écran. Appuyez sur `q` pour quitter.
+
+### Cas 2 — Évaluation de la quantification
+
+Nécessite d'avoir déjà entraîné le modèle (Cas 1) ou d'utiliser le fichier
+`lenet_mnist.npz` fourni.
+
+```bash
+python quantization.py        # vérification des primitives
+python eval_quantization.py   # mesure de fidélité float vs int8
+python benchmark.py           # mesure des économies (taille, RAM, temps, énergie)
+```
+
+## Structure du projet
+
+| Fichier                | Rôle                                                       |
+|------------------------|------------------------------------------------------------|
+| `mnist_loader.py`      | Téléchargement et chargement du dataset MNIST              |
+| `layers.py`            | Briques du réseau (Conv2D, MaxPool, Dense, ReLU, Softmax)  |
+| `model.py`             | Assemblage du LeNet, sauvegarde/chargement des poids       |
+| `train.py`             | Boucle d'entraînement et augmentation de données           |
+| `gradient_check.py`    | Validation de la rétropropagation (différences finies)     |
+| `preprocessing.py`     | Pipeline de transformation image webcam → format MNIST     |
+| `inference_cam.py`     | Boucle webcam OpenCV et inférence temps réel               |
+| `quantization.py`      | Primitives de quantification (QTensor, scales)             |
+| `quantized_model.py`   | Modèle quantifié full-integer (calibration + forward int8) |
+| `benchmark.py`         | Mesures comparatives float vs int8                         |
+| `eval_quantization.py` | Évaluation de la fidélité du modèle quantifié              |
+| `lenet_mnist.npz`      | Poids du modèle entraîné (float32)                         |
+| `lenet_quant.npz`      | Poids du modèle quantifié (int8)                           |
+
+## Auteurs
+
+Projet réalisé dans le cadre du projet Cassiopée n°79 à Télécom SudParis,
+encadré par M. Ghalid Abib.
