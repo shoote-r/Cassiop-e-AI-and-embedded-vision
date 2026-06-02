@@ -62,6 +62,8 @@ python benchmark.py           # mesure des économies (taille, RAM, temps, éner
 | `lenet_mnist.npz`      | Poids du modèle entraîné (float32)                         |
 | `lenet_quant.npz`      | Poids du modèle quantifié (int8)                           |
 
+- NB : architecture inspirée du LeNet après avoir essayé un MLP sans succès. La quantification a été réalisée sur les poids et les fonctions d'activation.
+
 ## Auteurs
 
 Projet réalisé dans le cadre du projet Cassiopée n°79 à Télécom SudParis,
